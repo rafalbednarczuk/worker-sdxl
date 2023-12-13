@@ -26,6 +26,7 @@ from rp_schemas import INPUT_SCHEMA
 
 torch.cuda.empty_cache()
 
+
 # ------------------------------- Model Handler ------------------------------ #
 
 
@@ -61,6 +62,7 @@ class ModelHandler:
 
 
 MODELS = ModelHandler()
+
 
 # ---------------------------------- Helper ---------------------------------- #
 
@@ -128,7 +130,7 @@ def generate_image(job):
         ).images
     else:
         # Generate latent image using pipe
-        image = MODELS.base(
+        output = MODELS.base(
             prompt=job_input['prompt'],
             negative_prompt=job_input['negative_prompt'],
             height=job_input['height'],
@@ -139,22 +141,6 @@ def generate_image(job):
             num_images_per_prompt=job_input['num_images'],
             generator=generator
         ).images
-
-        # Refine the image using refiner with refiner_inference_steps
-        try:
-            output = MODELS.refiner(
-                prompt=job_input['prompt'],
-                num_inference_steps=job_input['refiner_inference_steps'],
-                strength=job_input['strength'],
-                image=image,
-                num_images_per_prompt=job_input['num_images'],
-                generator=generator
-            ).images
-        except RuntimeError as err:
-            return {
-                "error": f"RuntimeError: {err}, Stack Trace: {err.__traceback__}",
-                "refresh_worker": True
-            }
 
     image_urls = _save_and_upload_images(output, job['id'])
 
