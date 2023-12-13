@@ -21,4 +21,3 @@ RUN python3.11 /cache_models.py && \
 ADD src .
 
 CMD python3.11 -u /rp_handler.py
-
