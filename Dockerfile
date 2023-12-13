@@ -4,8 +4,8 @@ FROM runpod/base:0.4.2-cuda11.8.0
 ENV HF_HUB_ENABLE_HF_TRANSFER=0
 
 RUN apt-get update && apt-get install -y aria2
-RUN aria2c -x8 "https://civitai.com/api/download/models/169921?type=Model&format=SafeTensor&size=pruned&fp=fp16" -o base_model.safetensors
-COPY base_model.safetensors /
+RUN aria2c -x8 "https://civitai.com/api/download/models/169921?type=Model&format=SafeTensor&size=pruned&fp=fp16" -o /base_model.safetensors
+COPY /base_model.safetensors /
 # Install Python dependencies (Worker Template)
 COPY builder/requirements.txt /requirements.txt
 RUN python3.11 -m pip install --upgrade pip && \
