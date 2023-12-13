@@ -9,6 +9,8 @@ jobs:
   docker:
     runs-on: ubuntu-latest
     steps:
+      - name: Delete huge unnecessary tools folder
+        run: rm -rf /opt/hostedtoolcache
       - name: Clear Space
         run: |
           rm -rf /usr/share/dotnet
