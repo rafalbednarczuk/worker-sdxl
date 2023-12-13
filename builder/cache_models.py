@@ -46,10 +46,10 @@ def get_diffusion_pipelines():
 
     pipe = fetch_pretrained_model_local(StableDiffusionXLPipeline,
                                         "/base_model.safetensors", **common_args)
-    # refiner = fetch_pretrained_model(StableDiffusionXLImg2ImgPipeline,
-    #                                  "stabilityai/stable-diffusion-xl-refiner-1.0", **common_args)
+    refiner = fetch_pretrained_model(StableDiffusionXLImg2ImgPipeline,
+                                     "stabilityai/stable-diffusion-xl-refiner-1.0", **common_args)
 
-    return pipe
+    return pipe, refiner
 
 
 if __name__ == "__main__":
