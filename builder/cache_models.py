@@ -30,10 +30,10 @@ def get_diffusion_pipelines():
 
     pipe = fetch_pretrained_model(StableDiffusionXLPipeline,
                                   "stabilityai/stable-diffusion-xl-base-1.0", **common_args)
-    refiner = fetch_pretrained_model(StableDiffusionXLImg2ImgPipeline,
-                                     "stabilityai/stable-diffusion-xl-refiner-1.0", **common_args)
+    # refiner = fetch_pretrained_model(StableDiffusionXLImg2ImgPipeline,
+    #                                  "stabilityai/stable-diffusion-xl-refiner-1.0", **common_args)
 
-    return pipe, refiner
+    return pipe#, refiner
 
 
 if __name__ == "__main__":
