@@ -9,7 +9,6 @@ import concurrent.futures
 import torch
 from diffusers import StableDiffusionXLPipeline, StableDiffusionXLImg2ImgPipeline
 from diffusers.utils import load_image
-from safetensors.torch import load_file
 
 from diffusers import (
     PNDMScheduler,
@@ -27,73 +26,7 @@ from rp_schemas import INPUT_SCHEMA
 
 torch.cuda.empty_cache()
 
-
 # ------------------------------- Model Handler ------------------------------ #
-
-def load_lora_weights(pipeline, checkpoint_path):
-    # load base model
-    pipeline.to("cuda")
-    LORA_PREFIX_UNET = "lora_unet"
-    LORA_PREFIX_TEXT_ENCODER = "lora_te"
-    alpha = 0.75
-    # load LoRA weight from .safetensors
-    state_dict = load_file(checkpoint_path, device="cuda")
-    visited = []
-
-    # directly update weight in diffusers model
-    for key in state_dict:
-        # it is suggested to print out the key, it usually will be something like below
-        # "lora_te_text_model_encoder_layers_0_self_attn_k_proj.lora_down.weight"
-
-        # as we have set the alpha beforehand, so just skip
-        if ".alpha" in key or key in visited:
-            continue
-
-        if "text" in key:
-            layer_infos = key.split(".")[0].split(LORA_PREFIX_TEXT_ENCODER + "_")[-1].split("_")
-            curr_layer = pipeline.text_encoder
-        else:
-            layer_infos = key.split(".")[0].split(LORA_PREFIX_UNET + "_")[-1].split("_")
-            curr_layer = pipeline.unet
-
-        # find the target layer
-        temp_name = layer_infos.pop(0)
-        while len(layer_infos) > -1:
-            try:
-                curr_layer = curr_layer.__getattr__(temp_name)
-                if len(layer_infos) > 0:
-                    temp_name = layer_infos.pop(0)
-                elif len(layer_infos) == 0:
-                    break
-            except Exception:
-                if len(temp_name) > 0:
-                    temp_name += "_" + layer_infos.pop(0)
-                else:
-                    temp_name = layer_infos.pop(0)
-
-        pair_keys = []
-        if "lora_down" in key:
-            pair_keys.append(key.replace("lora_down", "lora_up"))
-            pair_keys.append(key)
-        else:
-            pair_keys.append(key)
-            pair_keys.append(key.replace("lora_up", "lora_down"))
-
-        # update weight
-        if len(state_dict[pair_keys[0]].shape) == 4:
-            weight_up = state_dict[pair_keys[0]].squeeze(3).squeeze(2).to(torch.float32)
-            weight_down = state_dict[pair_keys[1]].squeeze(3).squeeze(2).to(torch.float32)
-            curr_layer.weight.data += alpha * torch.mm(weight_up, weight_down).unsqueeze(2).unsqueeze(3)
-        else:
-            weight_up = state_dict[pair_keys[0]].to(torch.float32)
-            weight_down = state_dict[pair_keys[1]].to(torch.float32)
-            curr_layer.weight.data += alpha * torch.mm(weight_up, weight_down)
-
-        # update visited list
-        for item in pair_keys:
-            visited.append(item)
-
-    return pipeline
 
 
 class ModelHandler:
@@ -103,22 +36,31 @@ class ModelHandler:
         self.load_models()
 
     def load_base(self):
-        base_pipe = StableDiffusionXLPipeline.from_single_file(
-            "/base_model.safetensors",
+        base_pipe = StableDiffusionXLPipeline.from_pretrained(
+            "stabilityai/stable-diffusion-xl-base-1.0",
             torch_dtype=torch.float16, variant="fp16", use_safetensors=True, add_watermarker=False
         ).to("cuda", silence_dtype_warnings=True)
         base_pipe.enable_xformers_memory_efficient_attention()
         return base_pipe
 
+    def load_refiner(self):
+        refiner_pipe = StableDiffusionXLImg2ImgPipeline.from_pretrained(
+            "stabilityai/stable-diffusion-xl-refiner-1.0",
+            torch_dtype=torch.float16, variant="fp16", use_safetensors=True, add_watermarker=False
+        ).to("cuda", silence_dtype_warnings=True)
+        refiner_pipe.enable_xformers_memory_efficient_attention()
+        return refiner_pipe
+
     def load_models(self):
         with concurrent.futures.ThreadPoolExecutor() as executor:
             future_base = executor.submit(self.load_base)
+            future_refiner = executor.submit(self.load_refiner)
 
             self.base = future_base.result()
+            self.refiner = future_refiner.result()
 
 
 MODELS = ModelHandler()
-
 
 # ---------------------------------- Helper ---------------------------------- #
 
@@ -186,7 +128,7 @@ def generate_image(job):
         ).images
     else:
         # Generate latent image using pipe
-        output = MODELS.base(
+        image = MODELS.base(
             prompt=job_input['prompt'],
             negative_prompt=job_input['negative_prompt'],
             height=job_input['height'],
@@ -197,6 +139,22 @@ def generate_image(job):
             num_images_per_prompt=job_input['num_images'],
             generator=generator
         ).images
+
+        # Refine the image using refiner with refiner_inference_steps
+        try:
+            output = MODELS.refiner(
+                prompt=job_input['prompt'],
+                num_inference_steps=job_input['refiner_inference_steps'],
+                strength=job_input['strength'],
+                image=image,
+                num_images_per_prompt=job_input['num_images'],
+                generator=generator
+            ).images
+        except RuntimeError as err:
+            return {
+                "error": f"RuntimeError: {err}, Stack Trace: {err.__traceback__}",
+                "refresh_worker": True
+            }
 
     image_urls = _save_and_upload_images(output, job['id'])
 
