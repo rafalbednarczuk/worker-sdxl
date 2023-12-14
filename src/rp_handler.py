@@ -144,7 +144,7 @@ def generate_image(job):
         print('image type ' + str(type(image)))
         # Refine the image using refiner with refiner_inference_steps
         try:
-            output = MODELS.base(
+            output = MODELS.refiner(
                 prompt=job_input['prompt'],
                 num_inference_steps=job_input['refiner_inference_steps'],
                 strength=job_input['strength'],
