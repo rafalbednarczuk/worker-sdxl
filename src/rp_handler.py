@@ -141,7 +141,7 @@ def generate_image(job):
             num_images_per_prompt=job_input['num_images'],
             generator=generator
         ).images
-        print('image type' + type(image))
+        print('image type ' + str(type(image)))
         # Refine the image using refiner with refiner_inference_steps
         try:
             output = MODELS.base(
@@ -158,7 +158,7 @@ def generate_image(job):
                 "refresh_worker": True
             }
 
-    print('output type' + type(output))
+    print('output type ' + str(type(output)))
     image_urls = _save_and_upload_images(output, job['id'])
 
     results = {
